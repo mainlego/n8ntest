@@ -1,0 +1,5 @@
+# Минимальный Dockerfile для n8n на Render
+FROM n8nio/n8n:latest
+
+# Просто используем официальный образ без изменений
+EXPOSE 5678
