@@ -1,0 +1,122 @@
+{
+  "name": "Schedule Notification (Production)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "schedule-notification",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook_schedule",
+      "name": "Webhook Schedule",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Логирование входящего запроса\nconst startTime = Date.now();\nconst requestData = $input.first().json;\n\nconsole.log('[INCOMING] Schedule notification request:', JSON.stringify(requestData));\n\n// Валидация обязательных полей\nconst requiredFields = ['activity_date', 'activity_id', 'activity_time', 'activity_url', 'activity_qr', 'id'];\nconst errors = [];\n\nfor (const field of requiredFields) {\n  if (!requestData.body[field]) {\n    errors.push(`Missing required field: ${field}`);\n  }\n}\n\nif (errors.length > 0) {\n  console.error('[ERROR] Validation failed:', errors);\n  return [{\n    json: {\n      success: false,\n      errors: errors,\n      statusCode: 400,\n      executionTime: Date.now() - startTime\n    }\n  }];\n}\n\nconst data = requestData.body;\n\n// Валидация формата даты и времени\nconst dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\nconst timeRegex = /^\\d{2}:\\d{2}$/;\n\nif (!dateRegex.test(data.activity_date)) {\n  return [{\n    json: {\n      success: false,\n      error: 'Invalid date format. Use YYYY-MM-DD',\n      statusCode: 400\n    }\n  }];\n}\n\nif (!timeRegex.test(data.activity_time)) {\n  return [{\n    json: {\n      success: false,\n      error: 'Invalid time format. Use HH:MM',\n      statusCode: 400\n    }\n  }];\n}\n\n// Проверка что событие в будущем\nconst eventDateTime = new Date(`${data.activity_date}T${data.activity_time}`);\nconst now = new Date();\n\nif (eventDateTime <= now) {\n  return [{\n    json: {\n      success: false,\n      error: 'Event date must be in the future',\n      statusCode: 400\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...data,\n    startTime: startTime,\n    eventDateTime: eventDateTime.toISOString(),\n    ip: requestData.headers['x-forwarded-for'] || requestData.headers['x-real-ip'] || 'unknown'\n  }\n}];"
+      },
+      "id": "validate_log",
+      "name": "Validate and Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\n// Расчет времени отправки уведомлений\nconst eventDate = new Date(data.eventDateTime);\nconst notifications = [];\n\n// 1. Уведомление накануне в 21:00\nconst dayBefore = new Date(data.activity_date);\ndayBefore.setDate(dayBefore.getDate() - 1);\ndayBefore.setHours(21, 0, 0, 0);\n\nif (dayBefore > new Date()) {\n  notifications.push({\n    activity_id: data.activity_id,\n    user_id: data.id,\n    notification_type: 'day_before',\n    scheduled_time: dayBefore.toISOString(),\n    activity_date: data.activity_date,\n    activity_time: data.activity_time,\n    activity_url: data.activity_url,\n    activity_qr: data.activity_qr,\n    status: 'pending',\n    notification_data: {\n      client_id: data.id,\n      message: `notification_${data.activity_id}`,\n      text: `Напоминаем: завтра в ${data.activity_time} у вас запланировано событие`,\n      button_url: data.activity_url\n    }\n  });\n}\n\n// 2. Уведомление за 3 часа до события\nconst threeHoursBefore = new Date(eventDate);\nthreeHoursBefore.setHours(threeHoursBefore.getHours() - 3);\n\nif (threeHoursBefore > new Date()) {\n  notifications.push({\n    activity_id: data.activity_id,\n    user_id: data.id,\n    notification_type: 'three_hours',\n    scheduled_time: threeHoursBefore.toISOString(),\n    activity_date: data.activity_date,\n    activity_time: data.activity_time,\n    activity_url: data.activity_url,\n    activity_qr: data.activity_qr,\n    status: 'pending',\n    notification_data: {\n      client_id: data.id,\n      message: `notification_${data.activity_id}`,\n      text: `Событие начнется через 3 часа в ${data.activity_time}`,\n      qr: data.activity_qr\n    }\n  });\n}\n\nreturn [{\n  json: {\n    notifications: notifications,\n    count: notifications.length,\n    activity_id: data.activity_id,\n    user_id: data.id,\n    startTime: data.startTime,\n    ip: data.ip\n  }\n}];"
+      },
+      "id": "calculate_schedule",
+      "name": "Calculate Schedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "scheduled_notifications",
+        "columns": "activity_id,user_id,notification_type,scheduled_time,activity_date,activity_time,activity_url,activity_qr,status,notification_data",
+        "returnFields": "*",
+        "options": {}
+      },
+      "id": "insert_notifications",
+      "name": "Insert to Supabase",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [850, 300],
+      "credentials": {
+        "postgres": {
+          "id": "supabase",
+          "name": "Supabase DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst startTime = $('Validate and Log').first().json.startTime;\nconst executionTime = Date.now() - startTime;\n\n// Логирование результата\nconsole.log(`[SUCCESS] Scheduled ${result.count} notifications in ${executionTime}ms`);\n\n// Логирование в БД\nconst logEntry = {\n  operation_type: 'schedule',\n  activity_id: result.activity_id,\n  user_id: result.user_id,\n  request_data: $('Webhook Schedule').first().json.body,\n  response_data: result,\n  status_code: 201,\n  execution_time_ms: executionTime,\n  ip_address: result.ip\n};\n\nreturn [{\n  json: {\n    success: true,\n    message: `Successfully scheduled ${result.count} notifications`,\n    activity_id: result.activity_id,\n    notifications: result.notifications.map(n => ({\n      type: n.notification_type,\n      scheduled_time: n.scheduled_time\n    })),\n    execution_time_ms: executionTime,\n    statusCode: 201\n  }\n}];"
+      },
+      "id": "prepare_response",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Schedule": {
+      "main": [
+        [
+          {
+            "node": "Validate and Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate and Log": {
+      "main": [
+        [
+          {
+            "node": "Calculate Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Schedule": {
+      "main": [
+        [
+          {
+            "node": "Insert to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 6
+  },
+  "versionId": "production-v1",
+  "tags": []
+}
