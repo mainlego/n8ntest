@@ -1,7 +1,7 @@
 // Конфигурация
 const CONFIG = {
     n8nWebhookUrl: 'https://n8ntest-uwxt.onrender.com',
-    n8nWebhookUrlWithProxy: 'https://corsproxy.io/?https://n8ntest-uwxt.onrender.com', // Временный CORS прокси
+    n8nWebhookUrlWithProxy: 'https://cors-anywhere.herokuapp.com/https://n8ntest-uwxt.onrender.com', // Временный CORS прокси
     supabaseUrl: 'https://xklameqcsrbvepjecwtn.supabase.co',
     supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MjE5MTIsImV4cCI6MjA3MTI5NzkxMn0.M82x241D4KgJ3GCKURlRfdr1qWsjLmjrWvzUMIMn9Oc',
     refreshInterval: 5000, // Обновление каждые 5 секунд
@@ -10,7 +10,7 @@ const CONFIG = {
 
 // Инициализация Supabase
 let supabase = null;
-let supabaseEnabled = false; // Временно отключаем пока не создадут таблицы
+let supabaseEnabled = true; // Включаем по умолчанию
 
 // Проверка доступности Supabase
 async function checkSupabaseConnection() {
@@ -89,15 +89,19 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Инициализация приложения
-function initializeApp() {
+async function initializeApp() {
     document.getElementById('webhookUrl').textContent = CONFIG.n8nWebhookUrl;
-    loadNotifications();
-    addLog('info', 'Система инициализирована');
     
-    if (!supabaseEnabled) {
-        addLog('warning', 'Supabase временно отключен. Создайте таблицы и выполните enableSupabase() в консоли.');
-        showAlert('warning', '⚠️ Для полной функциональности создайте таблицы в Supabase (см. документацию)');
+    // Инициализируем Supabase
+    if (supabaseEnabled && typeof window !== 'undefined' && window.supabase) {
+        supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+        document.getElementById('supabaseStatus').textContent = 'Подключен';
+        document.getElementById('enableSupabaseBtn').textContent = '✅ Supabase подключен';
+        document.getElementById('enableSupabaseBtn').disabled = true;
     }
+    
+    loadNotifications();
+    addLog('info', 'Система инициализирована. Готова к работе с реальными данными.');
 }
 
 // Обработка планирования
@@ -195,9 +199,12 @@ async function loadNotifications() {
             if (error) {
                 console.error('Supabase error:', error);
                 if (error.code === 'PGRST205') {
-                    addLog('warning', 'Таблицы Supabase не созданы. Работаем в демо-режиме.');
+                    addLog('error', 'Таблицы Supabase не созданы! Создайте таблицы для работы системы.');
+                    showAlert('error', '❌ Таблицы Supabase не найдены. См. документацию по настройке.');
+                } else {
+                    addLog('error', `Ошибка Supabase: ${error.message}`);
                 }
-                // Fallback на демо-данные
+                notifications = [];
                 updateNotificationsList();
             } else if (data && data.length > 0) {
                 notifications = data;
@@ -209,19 +216,30 @@ async function loadNotifications() {
                     window.lastNotificationCount = currentCount;
                 }
             } else {
-                // Если нет данных, показываем демо
+                // Если нет данных в базе
+                notifications = [];
                 updateNotificationsList();
+                if (!window.emptyDataLogged) {
+                    addLog('info', 'База данных пуста. Запланируйте первое уведомление!');
+                    window.emptyDataLogged = true;
+                }
             }
         } else {
-            // Если Supabase не доступен, используем демо-данные
+            // Если Supabase не доступен
+            notifications = [];
             updateNotificationsList();
+            if (!window.supabaseOfflineLogged) {
+                addLog('warning', 'Supabase отключен. Включите Supabase для работы с данными.');
+                window.supabaseOfflineLogged = true;
+            }
         }
         updateStats();
     } catch (error) {
         console.error('Error loading notifications:', error);
-        // Fallback на демо-данные
+        notifications = [];
         updateNotificationsList();
         updateStats();
+        addLog('error', `Ошибка загрузки данных: ${error.message}`);
     }
 }
 
@@ -229,34 +247,10 @@ async function loadNotifications() {
 function updateNotificationsList() {
     const container = document.getElementById('notifications');
     
-    // Генерируем демо-данные для показа
-    const demoNotifications = [
-        {
-            activity_id: document.getElementById('activityId').value || 'evt_001',
-            user_id: document.getElementById('userId').value || 'user_001',
-            notification_type: 'day_before',
-            scheduled_time: new Date(Date.now() + 86400000).toISOString(),
-            status: 'pending',
-            activity_time: '15:00'
-        },
-        {
-            activity_id: document.getElementById('activityId').value || 'evt_001',
-            user_id: document.getElementById('userId').value || 'user_001',
-            notification_type: 'three_hours',
-            scheduled_time: new Date(Date.now() + 10800000).toISOString(),
-            status: 'pending',
-            activity_time: '15:00'
-        }
-    ];
-    
-    // Добавляем существующие отправленные
-    const existingNotifications = notifications.filter(n => n.status === 'sent');
-    notifications = [...demoNotifications, ...existingNotifications].slice(0, 10);
-    
     let html = '';
     
     if (notifications.length === 0) {
-        html = '<div class="notification-item">Нет запланированных уведомлений</div>';
+        html = '<div class="notification-item">Нет запланированных уведомлений. Запланируйте первое уведомление!</div>';
     } else {
         notifications.forEach(notification => {
             const typeLabel = notification.notification_type === 'day_before' 
@@ -265,6 +259,13 @@ function updateNotificationsList() {
             
             const scheduledDate = new Date(notification.scheduled_time);
             const formattedTime = scheduledDate.toLocaleString('ru-RU');
+            
+            // Статус на русском
+            const statusLabels = {
+                'pending': 'Ожидает',
+                'sent': 'Отправлено', 
+                'cancelled': 'Отменено'
+            };
             
             html += `
                 <div class="notification-item ${notification.status}">
@@ -277,10 +278,15 @@ function updateNotificationsList() {
                             <div style="color: #888; font-size: 0.85em; margin-top: 3px;">
                                 Отправка: ${formattedTime}
                             </div>
+                            ${notification.sent_at ? `
+                                <div style="color: #28a745; font-size: 0.8em; margin-top: 2px;">
+                                    Отправлено: ${new Date(notification.sent_at).toLocaleString('ru-RU')}
+                                </div>
+                            ` : ''}
                         </div>
                         <div>
                             <span class="status-badge status-${notification.status}">
-                                ${notification.status}
+                                ${statusLabels[notification.status] || notification.status}
                             </span>
                             ${notification.status === 'pending' ? `
                                 <button class="btn btn-danger" style="margin-left: 10px; padding: 6px 12px; font-size: 12px;" 
@@ -424,32 +430,7 @@ function addLog(type, message) {
     }
 }
 
-// Симуляция автоматической отправки уведомлений
-setInterval(() => {
-    // Проверяем pending уведомления и "отправляем" их
-    let updated = false;
-    notifications.forEach(notification => {
-        if (notification.status === 'pending') {
-            const scheduledTime = new Date(notification.scheduled_time);
-            if (scheduledTime <= new Date()) {
-                notification.status = 'sent';
-                notification.sent_at = new Date().toISOString();
-                updated = true;
-                
-                const typeLabel = notification.notification_type === 'day_before' 
-                    ? 'Напоминание накануне' 
-                    : 'Напоминание за 3 часа';
-                
-                addLog('success', `✉️ Отправлено: ${typeLabel} для ${notification.activity_id}`);
-            }
-        }
-    });
-    
-    if (updated) {
-        updateNotificationsList();
-        updateStats();
-    }
-}, 5000);
+// Автоматическая отправка управляется n8n workflow, а не фронтендом
 
 // Сохранение уведомлений в Supabase
 async function saveNotificationsToSupabase(formData) {
