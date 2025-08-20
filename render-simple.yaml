@@ -1,0 +1,68 @@
+services:
+  # n8n Web Service
+  - type: web
+    name: n8n-notifications
+    runtime: docker
+    plan: free # Начнем с бесплатного плана
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      # Basic n8n config
+      - key: N8N_HOST
+        value: 0.0.0.0
+      - key: N8N_PORT
+        value: 5678
+      - key: N8N_PROTOCOL
+        value: https
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: n8n-notifications
+          property: host
+      - key: N8N_WEBHOOK_URL
+        fromService:
+          type: web
+          name: n8n-notifications
+          property: host
+      
+      # Security
+      - key: N8N_BASIC_AUTH_ACTIVE
+        value: true
+      - key: N8N_BASIC_AUTH_USER
+        value: admin
+      - key: N8N_BASIC_AUTH_PASSWORD
+        generateValue: true
+      
+      # Use SQLite for start (no external DB needed)
+      - key: DB_TYPE
+        value: sqlite
+      - key: DB_SQLITE_VACUUM_ON_STARTUP
+        value: true
+      
+      # Timezone
+      - key: GENERIC_TIMEZONE
+        value: Europe/Moscow
+      - key: TZ
+        value: Europe/Moscow
+      
+      # Webhook Security Keys
+      - key: WEBHOOK_API_KEY_SCHEDULE
+        value: schedule_key_a8f3d2e1b9c7f4a2d6e9b3c8f1a4d7e2
+      - key: WEBHOOK_API_KEY_CANCEL
+        value: cancel_key_b7e2d1a4f8c3b9e6d2a7f1c4e8b3d6a9
+      
+      # Notification API (update these)
+      - key: NOTIFICATION_API_URL
+        sync: false
+        value: https://api.example.com/send-notification
+      - key: NOTIFICATION_API_TOKEN
+        sync: false
+        value: Bearer_token_12345678901234567890
+
+databases:
+  # PostgreSQL для хранения уведомлений
+  - name: notifications-db
+    databaseName: notifications_db
+    user: postgres
+    plan: free # 90 дней бесплатно

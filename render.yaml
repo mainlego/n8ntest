@@ -2,7 +2,7 @@ services:
   # PostgreSQL Database
   - type: pserv
     name: n8n-postgres
-    env: docker
+    runtime: docker
     plan: starter # $7/month
     dockerfilePath: ./render/Dockerfile.postgres
     dockerContext: .
@@ -21,7 +21,7 @@ services:
   # n8n Application
   - type: web
     name: n8n-app
-    env: docker
+    runtime: docker
     plan: starter # $7/month
     dockerfilePath: ./render/Dockerfile.n8n
     dockerContext: .
