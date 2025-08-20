@@ -1,0 +1,51 @@
+{
+  "name": "Cancel Notification (Simple)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "DELETE",
+        "path": "cancel-notifications/:activity_id",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook_cancel",
+      "name": "Cancel Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "cancel-notification"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Получаем activity_id из параметров URL\nconst activityId = $input.first().json.params.activity_id;\n\nif (!activityId) {\n  return [{\n    json: {\n      success: false,\n      error: 'Missing activity_id parameter'\n    }\n  }];\n}\n\n// В реальном приложении здесь была бы логика отмены в БД\n// Сейчас просто возвращаем успешный ответ\n\nreturn [{\n  json: {\n    success: true,\n    message: `Notifications cancelled for activity ${activityId}`,\n    activity_id: activityId,\n    cancelled_count: 2,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "process_cancel",
+      "name": "Process Cancel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    }
+  ],
+  "connections": {
+    "Cancel Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "simple-v1",
+  "meta": {
+    "instanceId": "n8n-render"
+  },
+  "tags": []
+}

@@ -1,0 +1,51 @@
+{
+  "name": "Schedule Notification (Simple)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "schedule-notification",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "schedule-notification"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Получаем данные из webhook\nconst data = $input.first().json.body;\n\n// Валидация обязательных полей\nconst requiredFields = ['activity_date', 'activity_id', 'activity_time', 'activity_url', 'activity_qr', 'id'];\nfor (const field of requiredFields) {\n  if (!data[field]) {\n    return [{\n      json: {\n        success: false,\n        error: `Missing required field: ${field}`\n      }\n    }];\n  }\n}\n\n// Парсим дату и время события\nconst eventDate = new Date(`${data.activity_date}T${data.activity_time}`);\n\n// Создаем уведомления\nconst notifications = [];\n\n// Накануне в 21:00\nconst dayBefore = new Date(data.activity_date);\ndayBefore.setDate(dayBefore.getDate() - 1);\ndayBefore.setHours(21, 0, 0, 0);\n\nif (dayBefore > new Date()) {\n  notifications.push({\n    type: 'day_before',\n    scheduled_time: dayBefore.toISOString(),\n    activity_id: data.activity_id,\n    user_id: data.id,\n    activity_time: data.activity_time,\n    activity_url: data.activity_url\n  });\n}\n\n// За 3 часа до события\nconst threeHoursBefore = new Date(eventDate);\nthreeHoursBefore.setHours(threeHoursBefore.getHours() - 3);\n\nif (threeHoursBefore > new Date()) {\n  notifications.push({\n    type: 'three_hours',\n    scheduled_time: threeHoursBefore.toISOString(),\n    activity_id: data.activity_id,\n    user_id: data.id,\n    activity_time: data.activity_time,\n    activity_qr: data.activity_qr\n  });\n}\n\n// Возвращаем результат\nreturn [{\n  json: {\n    success: true,\n    message: `Scheduled ${notifications.length} notifications`,\n    activity_id: data.activity_id,\n    notifications: notifications\n  }\n}];"
+      },
+      "id": "process_data",
+      "name": "Process Schedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "simple-v1",
+  "meta": {
+    "instanceId": "n8n-render"
+  },
+  "tags": []
+}
