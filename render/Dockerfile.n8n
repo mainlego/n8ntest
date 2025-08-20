@@ -36,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:5678/healthz || exit 1
 
 # Запуск n8n с инициализацией
-CMD ["/bin/sh", "-c", "/home/node/init-n8n.sh && n8n start"]
+CMD ["sh", "-c", "/home/node/init-n8n.sh && n8n start"]

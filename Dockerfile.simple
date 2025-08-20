@@ -1,23 +1,24 @@
-# Default Dockerfile for n8n service
+# Простой Dockerfile для n8n на Render
 FROM n8nio/n8n:latest
 
 USER root
 
-# Install only essential tools
+# Установка только необходимых инструментов
 RUN apk add --no-cache curl
 
-# Create n8n data directory
+# Создание директорий
 RUN mkdir -p /home/node/.n8n && \
     chown -R node:node /home/node/.n8n
 
 USER node
 WORKDIR /home/node
 
+# Порт n8n
 EXPOSE 5678
 
-# Health check for Render
+# Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:5678/healthz || exit 1
 
-# Start n8n directly
+# Простой запуск n8n
 CMD ["n8n", "start"]

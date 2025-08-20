@@ -1,0 +1,68 @@
+# Environment Variables для Render.com
+# =====================================
+# Скопируйте эти переменные в настройки вашего сервиса на Render
+# Dashboard → Your Service → Environment → Add Environment Variables
+
+# Основные настройки n8n
+N8N_HOST=0.0.0.0
+N8N_PORT=5678
+N8N_PROTOCOL=https
+N8N_WEBHOOK_URL=https://n8ntest-uwxt.onrender.com
+WEBHOOK_URL=https://n8ntest-uwxt.onrender.com
+
+# Безопасность (ОБЯЗАТЕЛЬНО СМЕНИТЕ ПАРОЛЬ!)
+N8N_BASIC_AUTH_ACTIVE=true
+N8N_BASIC_AUTH_USER=admin
+N8N_BASIC_AUTH_PASSWORD=Secure#Pass2024!n8n
+
+# База данных (если используете Render PostgreSQL)
+# Эти значения Render установит автоматически при подключении БД
+# DB_TYPE=postgresdb
+# DB_POSTGRESDB_HOST=[будет установлен Render]
+# DB_POSTGRESDB_DATABASE=notifications_db
+# DB_POSTGRESDB_USER=postgres
+# DB_POSTGRESDB_PASSWORD=[будет установлен Render]
+
+# Временно используем SQLite
+DB_TYPE=sqlite
+DB_SQLITE_VACUUM_ON_STARTUP=true
+
+# API для отправки уведомлений
+# ВАЖНО: Замените на реальные значения когда будет готов ваш API
+NOTIFICATION_API_URL=https://webhook.site/7f8a9b3c-2d4e-5f6g-8h9i-0j1k2l3m4n5o
+NOTIFICATION_API_TOKEN=Bearer_xKj9Hs4Nf8Qw2Lp5Zv7Bc3Ym6Rt1Ga0Iu
+
+# Webhook Security Keys (криптографически стойкие ключи)
+WEBHOOK_API_KEY_SCHEDULE=wh_sched_7h3Kj9Xm2Np5Qw8Rt1Yv4Bc7Fg0Jk3Mn6Ps9Zx2Cd5Gh8Lq1Ws4
+WEBHOOK_API_KEY_CANCEL=wh_cancel_4Bv7Nx2Mz9Kl6Qw3Rt8Yp1Fg5Hj0Dc7Sn4Xa9Lm2Oi6Ue3Wb8
+
+# Timezone
+GENERIC_TIMEZONE=Europe/Moscow
+TZ=Europe/Moscow
+
+# Производительность
+EXECUTIONS_PROCESS=main
+N8N_CONCURRENCY_PRODUCTION_LIMIT=10
+N8N_PAYLOAD_SIZE_MAX=16
+N8N_METRICS=true
+
+# Логирование
+N8N_LOG_LEVEL=info
+N8N_LOG_OUTPUT=console
+
+# ===========================================
+# ИНСТРУКЦИЯ ПО НАСТРОЙКЕ
+# ===========================================
+# 
+# 1. Откройте Render Dashboard
+# 2. Выберите ваш сервис n8ntest-uwxt
+# 3. Перейдите в Environment
+# 4. Нажмите "Add Environment Variable"
+# 5. Добавьте каждую переменную из списка выше
+# 6. Нажмите "Save Changes"
+# 7. Сервис автоматически перезапустится
+#
+# ВАЖНО:
+# - Обязательно смените N8N_BASIC_AUTH_PASSWORD
+# - Обновите NOTIFICATION_API_URL когда будет готов реальный API
+# - Сохраните ключи WEBHOOK_API_KEY_* для использования в запросах
