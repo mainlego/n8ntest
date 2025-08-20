@@ -1,0 +1,201 @@
+{
+  "name": "Schedule Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "schedule-notification",
+        "authentication": "headerAuth",
+        "options": {
+          "headerAuth": {
+            "name": "X-API-Key",
+            "value": "={{ $env.WEBHOOK_API_KEY_SCHEDULE }}"
+          }
+        }
+      },
+      "id": "webhook_receive",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Валидация входящих данных\nconst requiredFields = ['activity_date', 'activity_id', 'activity_time', 'activity_url', 'activity_qr', 'id'];\nconst data = $input.first().json.body;\n\n// Проверка обязательных полей\nfor (const field of requiredFields) {\n  if (!data[field]) {\n    return [{\n      json: {\n        error: `Missing required field: ${field}`,\n        status: 'error',\n        code: 400\n      }\n    }];\n  }\n}\n\n// Валидация формата даты и времени\nconst dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\nconst timeRegex = /^\\d{2}:\\d{2}$/;\n\nif (!dateRegex.test(data.activity_date)) {\n  return [{\n    json: {\n      error: 'Invalid date format. Use YYYY-MM-DD',\n      status: 'error', \n      code: 400\n    }\n  }];\n}\n\nif (!timeRegex.test(data.activity_time)) {\n  return [{\n    json: {\n      error: 'Invalid time format. Use HH:MM',\n      status: 'error',\n      code: 400\n    }\n  }];\n}\n\n// Проверка что событие в будущем\nconst eventDateTime = new Date(`${data.activity_date}T${data.activity_time}`);\nconst now = new Date();\n\nif (eventDateTime <= now) {\n  return [{\n    json: {\n      error: 'Event date must be in the future',\n      status: 'error',\n      code: 400\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...data,\n    status: 'valid',\n    code: 200\n  }\n}];"
+      },
+      "id": "validate_input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "valid"
+            }
+          ]
+        }
+      },
+      "id": "check_validation",
+      "name": "Check Validation",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.first().json;\n\n// Парсим дату и время события\nconst eventDate = new Date(`${data.activity_date}T${data.activity_time}`);\n\n// Накануне в 21:00\nconst dayBefore = new Date(data.activity_date);\ndayBefore.setDate(dayBefore.getDate() - 1);\ndayBefore.setHours(21, 0, 0, 0);\n\n// За 3 часа до события\nconst threeHoursBefore = new Date(eventDate);\nthreeHoursBefore.setHours(threeHoursBefore.getHours() - 3);\n\n// Проверяем что время отправки в будущем\nconst now = new Date();\nconst notifications = [];\n\nif (dayBefore > now) {\n  notifications.push({\n    activity_id: data.activity_id,\n    user_id: data.id,\n    notification_type: 'day_before',\n    scheduled_time: dayBefore.toISOString(),\n    activity_date: data.activity_date,\n    activity_time: data.activity_time,\n    activity_url: data.activity_url,\n    activity_qr: data.activity_qr,\n    status: 'pending'\n  });\n}\n\nif (threeHoursBefore > now) {\n  notifications.push({\n    activity_id: data.activity_id,\n    user_id: data.id,\n    notification_type: 'three_hours',\n    scheduled_time: threeHoursBefore.toISOString(),\n    activity_date: data.activity_date,\n    activity_time: data.activity_time,\n    activity_url: data.activity_url,\n    activity_qr: data.activity_qr,\n    status: 'pending'\n  });\n}\n\nreturn notifications.map(notification => ({ json: notification }));"
+      },
+      "id": "calculate_schedule",
+      "name": "Calculate Schedule Times",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 250]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "scheduled_notifications",
+        "columns": "activity_id,user_id,notification_type,scheduled_time,activity_date,activity_time,activity_url,activity_qr,status",
+        "returnFields": "id,activity_id,notification_type,scheduled_time",
+        "options": {}
+      },
+      "id": "insert_notifications",
+      "name": "Insert Notifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1050, 250],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const notifications = $input.all().map(item => ({\n  id: item.json.id,\n  type: item.json.notification_type,\n  scheduled_time: item.json.scheduled_time\n}));\n\nreturn [{\n  json: {\n    success: true,\n    message: `Scheduled ${notifications.length} notifications`,\n    notifications: notifications,\n    activity_id: $input.first().json.activity_id\n  }\n}];"
+      },
+      "id": "prepare_response",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "responseCode": 201
+      },
+      "id": "success_response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 250]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "responseCode": "={{ $json.code }}"
+      },
+      "id": "error_response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "webhook_receive": {
+      "main": [
+        [
+          {
+            "node": "validate_input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validate_input": {
+      "main": [
+        [
+          {
+            "node": "check_validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_validation": {
+      "main": [
+        [
+          {
+            "node": "calculate_schedule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "error_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calculate_schedule": {
+      "main": [
+        [
+          {
+            "node": "insert_notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "insert_notifications": {
+      "main": [
+        [
+          {
+            "node": "prepare_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare_response": {
+      "main": [
+        [
+          {
+            "node": "success_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "workflow_schedule_notifications",
+  "tags": []
+}

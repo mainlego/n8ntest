@@ -1,0 +1,126 @@
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: n8n-postgres
+    env: docker
+    plan: starter # $7/month
+    dockerfilePath: ./render/Dockerfile.postgres
+    dockerContext: .
+    envVars:
+      - key: POSTGRES_DB
+        value: notifications_db
+      - key: POSTGRES_USER
+        value: postgres
+      - key: POSTGRES_PASSWORD
+        generateValue: true # Render сгенерирует безопасный пароль
+    disk:
+      name: postgres-data
+      mountPath: /var/lib/postgresql/data
+      sizeGB: 1
+
+  # n8n Application
+  - type: web
+    name: n8n-app
+    env: docker
+    plan: starter # $7/month
+    dockerfilePath: ./render/Dockerfile.n8n
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      # Basic n8n config
+      - key: N8N_HOST
+        value: 0.0.0.0
+      - key: N8N_PORT
+        value: 5678
+      - key: N8N_PROTOCOL
+        value: https
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: n8n-app
+          property: host
+      - key: N8N_WEBHOOK_URL
+        fromService:
+          type: web
+          name: n8n-app
+          property: host
+      
+      # Security
+      - key: N8N_BASIC_AUTH_ACTIVE
+        value: true
+      - key: N8N_BASIC_AUTH_USER
+        value: admin
+      - key: N8N_BASIC_AUTH_PASSWORD
+        generateValue: true # Render сгенерирует пароль
+      
+      # Database connection for n8n data
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromService:
+          type: pserv
+          name: n8n-postgres
+          property: hostport
+      - key: DB_POSTGRESDB_DATABASE
+        value: n8n
+      - key: DB_POSTGRESDB_USER
+        value: postgres
+      - key: DB_POSTGRESDB_PASSWORD
+        fromService:
+          type: pserv
+          name: n8n-postgres
+          envVarKey: POSTGRES_PASSWORD
+      
+      # Timezone
+      - key: GENERIC_TIMEZONE
+        value: Europe/Moscow
+      - key: TZ
+        value: Europe/Moscow
+      
+      # Webhook Security Keys
+      - key: WEBHOOK_API_KEY_SCHEDULE
+        sync: false
+        value: schedule_key_a8f3d2e1b9c7f4a2d6e9b3c8f1a4d7e2
+      - key: WEBHOOK_API_KEY_CANCEL
+        sync: false
+        value: cancel_key_b7e2d1a4f8c3b9e6d2a7f1c4e8b3d6a9
+      
+      # Notification API (нужно будет обновить)
+      - key: NOTIFICATION_API_URL
+        sync: false
+        value: https://api.example.com/send-notification
+      - key: NOTIFICATION_API_TOKEN
+        sync: false
+        value: Bearer_token_12345678901234567890
+      
+      # Performance
+      - key: EXECUTIONS_PROCESS
+        value: main
+      - key: N8N_CONCURRENCY_PRODUCTION_LIMIT
+        value: 10
+      
+    disk:
+      name: n8n-data
+      mountPath: /home/node/.n8n
+      sizeGB: 1
+
+databases:
+  # Дополнительная managed PostgreSQL база (опционально)
+  - name: notifications-db
+    databaseName: notifications_db
+    user: n8n_user
+    plan: starter # $7/month
+
+envVarGroups:
+  - name: n8n-secrets
+    envVars:
+      - key: NOTIFICATION_API_URL
+        sync: false
+        value: https://your-api.com/send-notification
+      - key: NOTIFICATION_API_TOKEN
+        sync: false
+        value: your_real_token_here
+      - key: WEBHOOK_API_KEY_SCHEDULE
+        generateValue: true
+      - key: WEBHOOK_API_KEY_CANCEL
+        generateValue: true

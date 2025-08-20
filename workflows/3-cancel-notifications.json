@@ -1,0 +1,201 @@
+{
+  "name": "Cancel Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "DELETE",
+        "path": "cancel-notifications/:activity_id",
+        "authentication": "headerAuth",
+        "options": {
+          "headerAuth": {
+            "name": "X-API-Key",
+            "value": "={{ $env.WEBHOOK_API_KEY_CANCEL }}"
+          }
+        }
+      },
+      "id": "webhook_cancel",
+      "name": "Webhook Cancel",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const activityId = $input.first().json.params.activity_id;\n\nif (!activityId) {\n  return [{\n    json: {\n      error: 'Missing activity_id parameter',\n      status: 'error',\n      code: 400\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    activity_id: activityId,\n    status: 'valid'\n  }\n}];"
+      },
+      "id": "extract_activity_id",
+      "name": "Extract Activity ID",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "valid"
+            }
+          ]
+        }
+      },
+      "id": "check_validation_cancel",
+      "name": "Check Validation",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE scheduled_notifications \nSET status = 'cancelled', sent_at = NOW()\nWHERE activity_id = $1 AND status = 'pending'\nRETURNING id",
+        "additionalFields": {
+          "queryParams": "={{ $json.activity_id }}"
+        },
+        "options": {}
+      },
+      "id": "cancel_notifications_db",
+      "name": "Cancel Notifications DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [850, 250],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const result = $input.all();\nconst cancelledCount = result.length;\nconst activityId = $('Extract Activity ID').first().json.activity_id;\n\nreturn [{\n  json: {\n    success: true,\n    message: `Cancelled ${cancelledCount} notifications`,\n    activity_id: activityId,\n    cancelled_count: cancelledCount,\n    cancelled_ids: result.map(r => r.json.id)\n  }\n}];"
+      },
+      "id": "prepare_cancel_response",
+      "name": "Prepare Cancel Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 250]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.first().json;\nconst timestamp = new Date().toISOString();\n\nconsole.log(`[${timestamp}] Cancelled ${data.cancelled_count} notifications for activity ${data.activity_id}`);\nconsole.log(`[${timestamp}] Cancelled IDs: ${data.cancelled_ids.join(', ')}`);\n\nreturn [{ json: data }];"
+      },
+      "id": "log_cancellation",
+      "name": "Log Cancellation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "responseCode": 200
+      },
+      "id": "cancel_success_response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 250]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "responseCode": "={{ $json.code }}"
+      },
+      "id": "cancel_error_response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "webhook_cancel": {
+      "main": [
+        [
+          {
+            "node": "extract_activity_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract_activity_id": {
+      "main": [
+        [
+          {
+            "node": "check_validation_cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_validation_cancel": {
+      "main": [
+        [
+          {
+            "node": "cancel_notifications_db",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "cancel_error_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancel_notifications_db": {
+      "main": [
+        [
+          {
+            "node": "prepare_cancel_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare_cancel_response": {
+      "main": [
+        [
+          {
+            "node": "log_cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "log_cancellation": {
+      "main": [
+        [
+          {
+            "node": "cancel_success_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "workflow_cancel_notifications",
+  "tags": []
+}

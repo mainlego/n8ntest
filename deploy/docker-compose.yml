@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: n8n_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: lego1994vM!
+      POSTGRES_DB: notifications_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - n8n-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notifications_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # n8n workflow automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n_app
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic config
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678
+      N8N_WEBHOOK_URL: http://localhost:5678
+      
+      # Security
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: admin
+      N8N_BASIC_AUTH_PASSWORD: admin123
+      
+      # Database for n8n data
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: postgres
+      DB_POSTGRESDB_PASSWORD: lego1994vM!
+      
+      # Timezone
+      GENERIC_TIMEZONE: Europe/Moscow
+      TZ: Europe/Moscow
+      
+      # Execution
+      EXECUTIONS_PROCESS: main
+      N8N_CONCURRENCY_PRODUCTION_LIMIT: 10
+      
+      # Webhook API Keys
+      WEBHOOK_API_KEY_SCHEDULE: schedule_key_a8f3d2e1b9c7f4a2d6e9b3c8f1a4d7e2
+      WEBHOOK_API_KEY_CANCEL: cancel_key_b7e2d1a4f8c3b9e6d2a7f1c4e8b3d6a9
+      
+      # Notification API (замените на реальные)
+      NOTIFICATION_API_URL: https://api.example.com/send-notification
+      NOTIFICATION_API_TOKEN: Bearer_token_12345678901234567890
+      
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../workflows:/workflows
+    networks:
+      - n8n-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: n8n start
+
+  # Nginx reverse proxy (опционально)
+  nginx:
+    image: nginx:alpine
+    container_name: n8n_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - n8n-network
+    depends_on:
+      - n8n
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+  n8n_data:
+
+networks:
+  n8n-network:
+    driver: bridge

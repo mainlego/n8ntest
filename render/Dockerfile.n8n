@@ -1,0 +1,39 @@
+FROM n8nio/n8n:latest
+
+# Установка пользователя root для установки зависимостей
+USER root
+
+# Установка дополнительных инструментов если нужно
+RUN apk add --no-cache \
+    curl \
+    postgresql-client
+
+# Создание директории для данных
+RUN mkdir -p /home/node/.n8n && \
+    chown -R node:node /home/node/.n8n
+
+# Создание директории для workflow
+RUN mkdir -p /home/node/workflows
+
+# Копирование workflow файлов
+COPY --chown=node:node workflows/*.json /home/node/workflows/
+
+# Копирование скрипта для импорта workflow
+COPY --chown=node:node render/init-n8n.sh /home/node/init-n8n.sh
+RUN chmod +x /home/node/init-n8n.sh
+
+# Переключение обратно на пользователя node
+USER node
+
+# Установка рабочей директории
+WORKDIR /home/node
+
+# Порт n8n
+EXPOSE 5678
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:5678/healthz || exit 1
+
+# Запуск n8n с инициализацией
+CMD ["/bin/sh", "-c", "/home/node/init-n8n.sh && n8n start"]

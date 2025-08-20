@@ -1,0 +1,275 @@
+{
+  "name": "Send Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM scheduled_notifications \nWHERE status = 'pending' \nAND scheduled_time <= NOW()\nORDER BY scheduled_time ASC\nLIMIT 10",
+        "options": {}
+      },
+      "id": "get_pending_notifications",
+      "name": "Get Pending Notifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $input.all().length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has_notifications",
+      "name": "Has Notifications",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const notifications = $input.all();\nconst results = [];\n\nfor (const notification of notifications) {\n  const data = notification.json;\n  \n  // Базовые поля для API\n  let payload = {\n    client_id: data.user_id,\n    message: `notification_${data.activity_id}`,\n    text: ''\n  };\n  \n  // Формируем текст уведомления\n  if (data.notification_type === 'day_before') {\n    payload.text = `Напоминание: завтра в ${data.activity_time} у вас запланировано событие. Для управления записью используйте кнопку ниже.`;\n    payload.button_url = data.activity_url;\n  } else if (data.notification_type === 'three_hours') {\n    payload.text = `Событие начнется через 3 часа в ${data.activity_time}. QR-код для подтверждения посещения прикреплен.`;\n    payload.qr = data.activity_qr;\n  }\n  \n  results.push({\n    json: {\n      ...payload,\n      notification_id: data.id,\n      activity_id: data.activity_id\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "prepare_notification_data",
+      "name": "Prepare Notification Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOTIFICATION_API_URL }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.NOTIFICATION_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.client_id }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "qr",
+              "value": "={{ $json.qr }}"
+            },
+            {
+              "name": "button_url",
+              "value": "={{ $json.button_url }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 2000,
+          "retry": 3,
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "id": "send_notification_api",
+      "name": "Send Notification API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 250],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "functionCode": "const response = $input.first().json;\nconst notificationData = $('Prepare Notification Data').first().json;\nconst notificationId = notificationData.notification_id;\n\n// Проверяем успешность отправки\nlet status = 'sent';\nlet errorMessage = null;\nlet sentAt = new Date().toISOString();\n\n// Проверка на ошибку\nif ($input.first().error) {\n  status = 'failed';\n  errorMessage = $input.first().error.message || 'Unknown error';\n} else if (response.statusCode && response.statusCode >= 400) {\n  status = 'failed';\n  errorMessage = `HTTP ${response.statusCode}: ${JSON.stringify(response.body) || 'Unknown error'}`;\n}\n\nreturn [{\n  json: {\n    notification_id: notificationId,\n    status: status,\n    sent_at: sentAt,\n    error_message: errorMessage\n  }\n}];"
+      },
+      "id": "process_response",
+      "name": "Process Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "scheduled_notifications",
+        "updateKey": "id",
+        "columns": "status,sent_at,error_message,retry_count",
+        "columnValues": "={{ $json.status }},={{ $json.sent_at }},={{ $json.error_message }},={{ ($json.status === 'failed') ? $('Get Pending Notifications').item.json.retry_count + 1 : $('Get Pending Notifications').item.json.retry_count }}",
+        "options": {
+          "returnFields": "id,status"
+        }
+      },
+      "id": "update_notification_status",
+      "name": "Update Notification Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1450, 250],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.first().json;\nconst timestamp = new Date().toISOString();\n\nconsole.log(`[${timestamp}] Notification ${data.id}: Status ${data.status}`);\n\nif (data.error_message) {\n  console.error(`[${timestamp}] Error for notification ${data.id}: ${data.error_message}`);\n}\n\nreturn [{ json: data }];"
+      },
+      "id": "log_result",
+      "name": "Log Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1650, 250]
+    },
+    {
+      "parameters": {
+        "functionCode": "console.log(`No pending notifications at ${new Date().toISOString()}`);\nreturn [{ json: { message: 'No pending notifications' } }];"
+      },
+      "id": "no_notifications",
+      "name": "No Notifications",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "schedule_trigger": {
+      "main": [
+        [
+          {
+            "node": "get_pending_notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_pending_notifications": {
+      "main": [
+        [
+          {
+            "node": "has_notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "has_notifications": {
+      "main": [
+        [
+          {
+            "node": "prepare_notification_data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "no_notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare_notification_data": {
+      "main": [
+        [
+          {
+            "node": "send_notification_api",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_notification_api": {
+      "main": [
+        [
+          {
+            "node": "process_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "process_response": {
+      "main": [
+        [
+          {
+            "node": "update_notification_status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_notification_status": {
+      "main": [
+        [
+          {
+            "node": "log_result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "workflow_send_notifications",
+  "tags": []
+}
