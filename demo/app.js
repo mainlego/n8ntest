@@ -8,9 +8,36 @@ const CONFIG = {
 
 // Инициализация Supabase
 let supabase = null;
-if (typeof window !== 'undefined' && window.supabase) {
-    supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+let supabaseEnabled = false; // Временно отключаем пока не создадут таблицы
+
+// Проверка доступности Supabase
+async function checkSupabaseConnection() {
+    if (!supabaseEnabled) return false;
+    
+    if (typeof window !== 'undefined' && window.supabase && !supabase) {
+        supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+    }
+    return supabase !== null;
 }
+
+// Функция для включения Supabase после создания таблиц
+function enableSupabase() {
+    supabaseEnabled = true;
+    if (typeof window !== 'undefined' && window.supabase) {
+        supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+        addLog('success', 'Supabase подключен! Попробуйте запланировать уведомление.');
+        
+        // Обновляем статус в интерфейсе
+        document.getElementById('supabaseStatus').textContent = 'Подключен';
+        document.getElementById('enableSupabaseBtn').textContent = '✅ Supabase подключен';
+        document.getElementById('enableSupabaseBtn').disabled = true;
+        
+        loadNotifications(); // Перезагружаем данные
+    }
+}
+
+// Глобальная функция для включения из консоли
+window.enableSupabase = enableSupabase;
 
 // Глобальные переменные
 let notifications = [];
@@ -42,6 +69,11 @@ function initializeApp() {
     document.getElementById('webhookUrl').textContent = CONFIG.n8nWebhookUrl;
     loadNotifications();
     addLog('info', 'Система инициализирована');
+    
+    if (!supabaseEnabled) {
+        addLog('warning', 'Supabase временно отключен. Создайте таблицы и выполните enableSupabase() в консоли.');
+        showAlert('warning', '⚠️ Для полной функциональности создайте таблицы в Supabase (см. документацию)');
+    }
 }
 
 // Обработка планирования
@@ -122,7 +154,9 @@ async function handleSchedule(e) {
 // Загрузка уведомлений из Supabase
 async function loadNotifications() {
     try {
-        if (supabase) {
+        const supabaseConnected = await checkSupabaseConnection();
+        
+        if (supabaseConnected && supabase) {
             // Загружаем реальные данные из Supabase
             const { data, error } = await supabase
                 .from('scheduled_notifications')
@@ -132,11 +166,15 @@ async function loadNotifications() {
             
             if (error) {
                 console.error('Supabase error:', error);
+                if (error.code === 'PGRST205') {
+                    addLog('warning', 'Таблицы Supabase не созданы. Работаем в демо-режиме.');
+                }
                 // Fallback на демо-данные
                 updateNotificationsList();
             } else if (data && data.length > 0) {
                 notifications = data;
                 updateNotificationsList();
+                addLog('success', `Загружено ${data.length} уведомлений из Supabase`);
             } else {
                 // Если нет данных, показываем демо
                 updateNotificationsList();
