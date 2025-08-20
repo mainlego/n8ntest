@@ -2,9 +2,15 @@
 const CONFIG = {
     n8nWebhookUrl: 'https://n8ntest-uwxt.onrender.com',
     supabaseUrl: 'https://xklameqcsrbvepjecwtn.supabase.co',
-    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MTE1NTUsImV4cCI6MjA1MDI4NzU1NX0.YourActualKeyHere', // Замените на ваш anon key из Supabase
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MjE5MTIsImV4cCI6MjA3MTI5NzkxMn0.M82x241D4KgJ3GCKURlRfdr1qWsjLmjrWvzUMIMn9Oc',
     refreshInterval: 5000 // Обновление каждые 5 секунд
 };
+
+// Инициализация Supabase
+let supabase = null;
+if (typeof window !== 'undefined' && window.supabase) {
+    supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+}
 
 // Глобальные переменные
 let notifications = [];
@@ -70,6 +76,11 @@ async function handleSchedule(e) {
             showAlert('success', `✅ Уведомления запланированы! (${executionTime}ms)`);
             addLog('success', `Запланированы уведомления для события ${formData.activity_id} (время выполнения: ${executionTime}ms)`);
             
+            // Сохраняем в Supabase для демо
+            if (supabase) {
+                await saveNotificationsToSupabase(formData);
+            }
+            
             // Генерируем новый ID для следующего события
             const nextId = 'evt_' + Math.random().toString(36).substr(2, 9);
             document.getElementById('activityId').value = nextId;
@@ -87,15 +98,38 @@ async function handleSchedule(e) {
     }
 }
 
-// Загрузка уведомлений из Supabase (симуляция)
+// Загрузка уведомлений из Supabase
 async function loadNotifications() {
     try {
-        // Для демо генерируем тестовые данные
-        // В реальном приложении здесь был бы запрос к Supabase
-        updateNotificationsList();
+        if (supabase) {
+            // Загружаем реальные данные из Supabase
+            const { data, error } = await supabase
+                .from('scheduled_notifications')
+                .select('*')
+                .order('scheduled_time', { ascending: true })
+                .limit(20);
+            
+            if (error) {
+                console.error('Supabase error:', error);
+                // Fallback на демо-данные
+                updateNotificationsList();
+            } else if (data && data.length > 0) {
+                notifications = data;
+                updateNotificationsList();
+            } else {
+                // Если нет данных, показываем демо
+                updateNotificationsList();
+            }
+        } else {
+            // Если Supabase не доступен, используем демо-данные
+            updateNotificationsList();
+        }
         updateStats();
     } catch (error) {
         console.error('Error loading notifications:', error);
+        // Fallback на демо-данные
+        updateNotificationsList();
+        updateStats();
     }
 }
 
@@ -184,6 +218,19 @@ async function cancelNotification(activityId) {
         if (response.ok && data.success) {
             showAlert('success', `✅ Уведомления отменены для ${activityId}`);
             addLog('success', `Отменены уведомления для события ${activityId}`);
+            
+            // Обновляем статус в Supabase
+            if (supabase) {
+                const { error } = await supabase
+                    .from('scheduled_notifications')
+                    .update({ status: 'cancelled' })
+                    .eq('activity_id', activityId)
+                    .eq('status', 'pending');
+                
+                if (error) {
+                    console.error('Error cancelling in Supabase:', error);
+                }
+            }
             
             // Обновляем статус в списке
             notifications.forEach(n => {
@@ -278,6 +325,83 @@ setInterval(() => {
         updateStats();
     }
 }, 5000);
+
+// Сохранение уведомлений в Supabase
+async function saveNotificationsToSupabase(formData) {
+    if (!supabase) return;
+    
+    try {
+        const activityDateTime = new Date(`${formData.activity_date}T${formData.activity_time}`);
+        
+        // Создаем два уведомления: накануне в 21:00 и за 3 часа
+        const dayBefore = new Date(activityDateTime);
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        dayBefore.setHours(21, 0, 0, 0);
+        
+        const threeHoursBefore = new Date(activityDateTime);
+        threeHoursBefore.setHours(threeHoursBefore.getHours() - 3);
+        
+        const notifications = [
+            {
+                activity_id: formData.activity_id,
+                user_id: formData.id,
+                notification_type: 'day_before',
+                scheduled_time: dayBefore.toISOString(),
+                status: 'pending',
+                activity_time: formData.activity_time,
+                activity_url: formData.activity_url,
+                activity_qr: formData.activity_qr,
+                created_at: new Date().toISOString()
+            },
+            {
+                activity_id: formData.activity_id,
+                user_id: formData.id,
+                notification_type: 'three_hours',
+                scheduled_time: threeHoursBefore.toISOString(),
+                status: 'pending',
+                activity_time: formData.activity_time,
+                activity_url: formData.activity_url,
+                activity_qr: formData.activity_qr,
+                created_at: new Date().toISOString()
+            }
+        ];
+        
+        const { data, error } = await supabase
+            .from('scheduled_notifications')
+            .insert(notifications);
+        
+        if (error) {
+            console.error('Error saving to Supabase:', error);
+        } else {
+            console.log('Saved to Supabase:', data);
+        }
+    } catch (error) {
+        console.error('Error in saveNotificationsToSupabase:', error);
+    }
+}
+
+// Обновление статуса уведомления в Supabase
+async function updateNotificationStatus(notificationId, status) {
+    if (!supabase) return;
+    
+    try {
+        const updateData = { status };
+        if (status === 'sent') {
+            updateData.sent_at = new Date().toISOString();
+        }
+        
+        const { data, error } = await supabase
+            .from('scheduled_notifications')
+            .update(updateData)
+            .eq('id', notificationId);
+        
+        if (error) {
+            console.error('Error updating status:', error);
+        }
+    } catch (error) {
+        console.error('Error in updateNotificationStatus:', error);
+    }
+}
 
 // Тестовая функция для симуляции отправки уведомления
 async function simulateSendNotification(notification) {
