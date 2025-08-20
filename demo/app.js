@@ -1,9 +1,11 @@
 // Конфигурация
 const CONFIG = {
     n8nWebhookUrl: 'https://n8ntest-uwxt.onrender.com',
+    n8nWebhookUrlWithProxy: 'https://corsproxy.io/?https://n8ntest-uwxt.onrender.com', // Временный CORS прокси
     supabaseUrl: 'https://xklameqcsrbvepjecwtn.supabase.co',
     supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MjE5MTIsImV4cCI6MjA3MTI5NzkxMn0.M82x241D4KgJ3GCKURlRfdr1qWsjLmjrWvzUMIMn9Oc',
-    refreshInterval: 5000 // Обновление каждые 5 секунд
+    refreshInterval: 5000, // Обновление каждые 5 секунд
+    useCorsProxy: true // Включить CORS прокси временно
 };
 
 // Инициализация Supabase
@@ -36,8 +38,30 @@ function enableSupabase() {
     }
 }
 
-// Глобальная функция для включения из консоли
+// Функция переключения CORS прокси
+function toggleCorsProxy() {
+    CONFIG.useCorsProxy = !CONFIG.useCorsProxy;
+    
+    const status = CONFIG.useCorsProxy ? 'Включен' : 'Отключен';
+    const btnText = CONFIG.useCorsProxy ? '🌐 CORS Прокси: Включен' : '🌐 CORS Прокси: Отключен';
+    const btnColor = CONFIG.useCorsProxy ? '#f39c12' : '#95a5a6';
+    
+    document.getElementById('corsProxyStatus').textContent = status;
+    document.getElementById('toggleCorsBtn').textContent = btnText;
+    document.getElementById('toggleCorsBtn').style.background = btnColor;
+    
+    addLog('info', `CORS прокси ${status.toLowerCase()}`);
+    
+    if (CONFIG.useCorsProxy) {
+        showAlert('info', '🌐 CORS прокси включен. Webhook запросы будут проходить через прокси.');
+    } else {
+        showAlert('warning', '⚠️ CORS прокси отключен. Нужно настроить CORS в n8n.');
+    }
+}
+
+// Глобальные функции
 window.enableSupabase = enableSupabase;
+window.toggleCorsProxy = toggleCorsProxy;
 
 // Глобальные переменные
 let notifications = [];
@@ -93,7 +117,11 @@ async function handleSchedule(e) {
     const startTime = Date.now();
     
     try {
-        const response = await fetch(`${CONFIG.n8nWebhookUrl}/webhook/schedule-notification`, {
+        const webhookUrl = CONFIG.useCorsProxy 
+            ? `${CONFIG.n8nWebhookUrlWithProxy}/webhook/schedule-notification`
+            : `${CONFIG.n8nWebhookUrl}/webhook/schedule-notification`;
+            
+        const response = await fetch(webhookUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -273,7 +301,11 @@ function updateNotificationsList() {
 // Отмена уведомления
 async function cancelNotification(activityId) {
     try {
-        const response = await fetch(`${CONFIG.n8nWebhookUrl}/webhook/cancel-notifications/${activityId}`, {
+        const webhookUrl = CONFIG.useCorsProxy 
+            ? `${CONFIG.n8nWebhookUrlWithProxy}/webhook/cancel-notifications/${activityId}`
+            : `${CONFIG.n8nWebhookUrl}/webhook/cancel-notifications/${activityId}`;
+            
+        const response = await fetch(webhookUrl, {
             method: 'DELETE'
         });
         

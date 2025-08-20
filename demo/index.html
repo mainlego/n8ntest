@@ -376,14 +376,21 @@
                         <span class="config-label">Статус Supabase:</span>
                         <span class="config-value" id="supabaseStatus">Отключено</span>
                     </div>
+                    <div class="config-item">
+                        <span class="config-label">CORS Прокси:</span>
+                        <span class="config-value" id="corsProxyStatus">Включен</span>
+                    </div>
                 </div>
                 
                 <div style="margin-top: 15px;">
-                    <button id="enableSupabaseBtn" class="btn btn-success" onclick="enableSupabase()" style="width: 100%;">
+                    <button id="enableSupabaseBtn" class="btn btn-success" onclick="enableSupabase()" style="width: 100%; margin-bottom: 10px;">
                         🔌 Включить Supabase
                     </button>
+                    <button id="toggleCorsBtn" class="btn" onclick="toggleCorsProxy()" style="width: 100%; background: #f39c12; color: white;">
+                        🌐 CORS Прокси: Включен
+                    </button>
                     <small style="color: #666; display: block; margin-top: 5px;">
-                        Сначала создайте таблицы в Supabase (см. документацию)
+                        CORS прокси: временное решение для тестирования
                     </small>
                 </div>
             </div>
