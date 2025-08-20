@@ -1,11 +1,11 @@
 // Конфигурация
 const CONFIG = {
     n8nWebhookUrl: 'https://n8ntest-uwxt.onrender.com',
-    n8nWebhookUrlWithProxy: 'https://cors-anywhere.herokuapp.com/https://n8ntest-uwxt.onrender.com', // Временный CORS прокси
+    n8nWebhookUrlWithProxy: 'https://api.allorigins.win/raw?url=https://n8ntest-uwxt.onrender.com', // Рабочий CORS прокси
     supabaseUrl: 'https://xklameqcsrbvepjecwtn.supabase.co',
     supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MjE5MTIsImV4cCI6MjA3MTI5NzkxMn0.M82x241D4KgJ3GCKURlRfdr1qWsjLmjrWvzUMIMn9Oc',
     refreshInterval: 5000, // Обновление каждые 5 секунд
-    useCorsProxy: true // Включить CORS прокси временно
+    useCorsProxy: false // CORS прокси отключен, нужно настроить n8n
 };
 
 // Инициализация Supabase
@@ -59,9 +59,36 @@ function toggleCorsProxy() {
     }
 }
 
+// Тест CORS подключения
+async function testCors() {
+    addLog('info', 'Тестируем CORS подключение к n8n...');
+    
+    try {
+        const response = await fetch(`${CONFIG.n8nWebhookUrl}/healthz`, {
+            method: 'GET',
+            mode: 'cors'
+        });
+        
+        if (response.ok) {
+            addLog('success', '✅ CORS настроен корректно! n8n доступен.');
+            showAlert('success', '✅ CORS работает! Можно планировать уведомления.');
+        } else {
+            addLog('warning', `⚠️ n8n отвечает, но статус: ${response.status}`);
+        }
+    } catch (error) {
+        if (error.message.includes('CORS')) {
+            addLog('error', '❌ CORS заблокирован. Настройте переменные в Render.');
+            showAlert('error', '❌ CORS не настроен. См. инструкции выше.');
+        } else {
+            addLog('error', `❌ Ошибка подключения: ${error.message}`);
+        }
+    }
+}
+
 // Глобальные функции
 window.enableSupabase = enableSupabase;
 window.toggleCorsProxy = toggleCorsProxy;
+window.testCors = testCors;
 
 // Глобальные переменные
 let notifications = [];
@@ -100,8 +127,21 @@ async function initializeApp() {
         document.getElementById('enableSupabaseBtn').disabled = true;
     }
     
+    // Обновляем статус CORS прокси
+    const corsStatus = CONFIG.useCorsProxy ? 'Включен' : 'Отключен';
+    const corsBtn = CONFIG.useCorsProxy ? '🌐 CORS Прокси: Включен' : '🌐 CORS Прокси: Отключен';
+    const corsColor = CONFIG.useCorsProxy ? '#f39c12' : '#95a5a6';
+    
+    document.getElementById('corsProxyStatus').textContent = corsStatus;
+    document.getElementById('toggleCorsBtn').textContent = corsBtn;
+    document.getElementById('toggleCorsBtn').style.background = corsColor;
+    
     loadNotifications();
     addLog('info', 'Система инициализирована. Готова к работе с реальными данными.');
+    
+    if (!CONFIG.useCorsProxy) {
+        addLog('warning', 'CORS прокси отключен. Настройте CORS в n8n для работы webhooks.');
+    }
 }
 
 // Обработка планирования

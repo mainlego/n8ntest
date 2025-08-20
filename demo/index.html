@@ -390,8 +390,20 @@
                         🌐 CORS Прокси: Включен
                     </button>
                     <small style="color: #666; display: block; margin-top: 5px;">
-                        CORS прокси: временное решение для тестирования
+                        Настройте CORS в n8n или включите прокси для тестирования
                     </small>
+                    
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 12px;">
+                        <strong>📋 Настройка CORS в n8n (Render):</strong><br>
+                        1. Environment → Add Variable<br>
+                        2. <code>WEBHOOK_CORS_ENABLED=true</code><br>
+                        3. <code>WEBHOOK_CORS_ORIGIN=https://mainlego.github.io</code><br>
+                        4. Save Changes (автодеплой)
+                        <br><br>
+                        <button onclick="testCors()" class="btn" style="background: #17a2b8; color: white; width: 100%;">
+                            🧪 Тест CORS
+                        </button>
+                    </div>
                 </div>
             </div>
             
