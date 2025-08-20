@@ -93,8 +93,29 @@ async function handleSchedule(e) {
             throw new Error(data.error || 'Неизвестная ошибка');
         }
     } catch (error) {
-        showAlert('error', `❌ Ошибка: ${error.message}`);
-        addLog('error', `Ошибка планирования: ${error.message}`);
+        // Проверяем, если это CORS ошибка
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            showAlert('error', `⚠️ Не удается подключиться к n8n. Работаем в демо-режиме.`);
+            addLog('warning', `CORS блокировка или n8n недоступен. Используем локальное сохранение.`);
+            
+            // Сохраняем только в Supabase в демо-режиме
+            if (supabase) {
+                await saveNotificationsToSupabase(formData);
+                showAlert('success', `✅ Уведомления сохранены локально (демо-режим)`);
+                
+                // Генерируем новый ID
+                const nextId = 'evt_' + Math.random().toString(36).substr(2, 9);
+                document.getElementById('activityId').value = nextId;
+                document.getElementById('activityUrl').value = `https://example.com/manage/${nextId}`;
+                document.getElementById('activityQr').value = `https://example.com/qr/${nextId}.png`;
+                
+                // Обновляем список
+                setTimeout(loadNotifications, 1000);
+            }
+        } else {
+            showAlert('error', `❌ Ошибка: ${error.message}`);
+            addLog('error', `Ошибка планирования: ${error.message}`);
+        }
     }
 }
 
@@ -245,8 +266,37 @@ async function cancelNotification(activityId) {
             throw new Error(data.error || 'Неизвестная ошибка');
         }
     } catch (error) {
-        showAlert('error', `❌ Ошибка отмены: ${error.message}`);
-        addLog('error', `Ошибка отмены: ${error.message}`);
+        // Проверяем, если это CORS ошибка
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            showAlert('warning', `⚠️ n8n недоступен. Отменяем локально.`);
+            addLog('warning', `CORS блокировка. Отмена только в Supabase.`);
+            
+            // Обновляем только в Supabase
+            if (supabase) {
+                const { error } = await supabase
+                    .from('scheduled_notifications')
+                    .update({ status: 'cancelled' })
+                    .eq('activity_id', activityId)
+                    .eq('status', 'pending');
+                
+                if (!error) {
+                    showAlert('success', `✅ Уведомления отменены локально`);
+                    
+                    // Обновляем статус в списке
+                    notifications.forEach(n => {
+                        if (n.activity_id === activityId) {
+                            n.status = 'cancelled';
+                        }
+                    });
+                    
+                    updateNotificationsList();
+                    updateStats();
+                }
+            }
+        } else {
+            showAlert('error', `❌ Ошибка отмены: ${error.message}`);
+            addLog('error', `Ошибка отмены: ${error.message}`);
+        }
     }
 }
 
