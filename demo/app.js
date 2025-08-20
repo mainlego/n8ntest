@@ -2,7 +2,7 @@
 const CONFIG = {
     n8nWebhookUrl: 'https://n8ntest-uwxt.onrender.com',
     supabaseUrl: 'https://xklameqcsrbvepjecwtn.supabase.co',
-    supabaseKey: 'YOUR_SUPABASE_ANON_KEY', // Нужно добавить из Supabase Dashboard
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MTE1NTUsImV4cCI6MjA1MDI4NzU1NX0.YourActualKeyHere', // Замените на ваш anon key из Supabase
     refreshInterval: 5000 // Обновление каждые 5 секунд
 };
 
