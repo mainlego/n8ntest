@@ -174,7 +174,12 @@ async function loadNotifications() {
             } else if (data && data.length > 0) {
                 notifications = data;
                 updateNotificationsList();
-                addLog('success', `Загружено ${data.length} уведомлений из Supabase`);
+                // Не логируем каждый раз одно и то же количество
+                const currentCount = notifications.length;
+                if (!window.lastNotificationCount || window.lastNotificationCount !== currentCount) {
+                    addLog('success', `Загружено ${data.length} уведомлений из Supabase`);
+                    window.lastNotificationCount = currentCount;
+                }
             } else {
                 // Если нет данных, показываем демо
                 updateNotificationsList();
