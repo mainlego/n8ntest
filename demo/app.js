@@ -1,11 +1,11 @@
 // Конфигурация
 const CONFIG = {
     n8nWebhookUrl: 'https://n8ntest-uwxt.onrender.com',
-    n8nWebhookUrlWithProxy: 'https://api.allorigins.win/raw?url=https://n8ntest-uwxt.onrender.com', // Рабочий CORS прокси
+    n8nWebhookUrlWithProxy: 'https://proxy.cors.sh/https://n8ntest-uwxt.onrender.com', // Рабочий CORS прокси
     supabaseUrl: 'https://xklameqcsrbvepjecwtn.supabase.co',
     supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MjE5MTIsImV4cCI6MjA3MTI5NzkxMn0.M82x241D4KgJ3GCKURlRfdr1qWsjLmjrWvzUMIMn9Oc',
     refreshInterval: 5000, // Обновление каждые 5 секунд
-    useCorsProxy: false // CORS прокси отключен, нужно настроить n8n
+    useCorsProxy: true // CORS прокси включен для обхода блокировки
 };
 
 // Инициализация Supabase
