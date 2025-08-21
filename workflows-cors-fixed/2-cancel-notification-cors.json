@@ -1,0 +1,69 @@
+{
+  "name": "Cancel Notification with CORS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "DELETE",
+        "path": "cancel-notifications/:activity_id",
+        "responseMode": "lastNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, DELETE, OPTIONS, PUT"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              }
+            ]
+          }
+        }
+      },
+      "id": "webhook-cancel",
+      "name": "Cancel Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "cancel-notification-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Получаем activity_id из параметров URL\nconst activityId = $input.first().json.params.activity_id;\n\n// Логируем для отладки\nconsole.log('Cancelling notifications for activity:', activityId);\n\n// Проверяем наличие activity_id\nif (!activityId) {\n  return [{\n    json: {\n      success: false,\n      error: 'Missing activity_id parameter',\n      timestamp: new Date().toISOString()\n    }\n  }];\n}\n\n// В реальном приложении здесь была бы логика работы с БД\n// Сейчас возвращаем успешный ответ для демо\n\nreturn [{\n  json: {\n    success: true,\n    message: `Notifications cancelled for activity ${activityId}`,\n    activity_id: activityId,\n    cancelled_count: 2,\n    cancelled_types: ['day_before', 'three_hours'],\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-cancel",
+      "name": "Process Cancel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cancel Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "cors-fixed-v1",
+  "meta": {
+    "instanceId": "n8n-render"
+  },
+  "tags": []
+}
