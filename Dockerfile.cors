@@ -1,0 +1,43 @@
+FROM n8nio/n8n:latest
+
+# Установка nginx
+USER root
+RUN apk add --no-cache nginx
+
+# Создаем конфигурацию nginx с CORS
+RUN echo 'server { \
+    listen 80; \
+    \
+    location / { \
+        if ($request_method = OPTIONS) { \
+            add_header Access-Control-Allow-Origin "*"; \
+            add_header Access-Control-Allow-Methods "GET, POST, DELETE, PUT, PATCH, OPTIONS"; \
+            add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"; \
+            add_header Access-Control-Max-Age 86400; \
+            add_header Content-Length 0; \
+            add_header Content-Type text/plain; \
+            return 204; \
+        } \
+        \
+        add_header Access-Control-Allow-Origin "*" always; \
+        add_header Access-Control-Allow-Methods "GET, POST, DELETE, PUT, PATCH, OPTIONS" always; \
+        add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always; \
+        \
+        proxy_pass http://localhost:5678; \
+        proxy_http_version 1.1; \
+        proxy_set_header Upgrade $http_upgrade; \
+        proxy_set_header Connection "upgrade"; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        proxy_set_header X-Forwarded-Proto $scheme; \
+    } \
+}' > /etc/nginx/http.d/default.conf
+
+# Скрипт запуска
+RUN echo '#!/bin/sh\n\
+nginx\n\
+exec n8n' > /start.sh && chmod +x /start.sh
+
+EXPOSE 80
+CMD ["/start.sh"]
