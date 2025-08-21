@@ -1,7 +1,16 @@
 // Конфигурация
 const CONFIG = {
     n8nWebhookUrl: 'https://n8ntest-uwxt.onrender.com',
-    n8nWebhookUrlWithProxy: 'https://proxy.cors.sh/https://n8ntest-uwxt.onrender.com', // Рабочий CORS прокси
+    // Различные прокси опции (выберите одну)
+    corsProxyOptions: {
+        // 1. Публичный прокси (работает сейчас)
+        public: 'https://proxy.cors.sh/https://n8ntest-uwxt.onrender.com',
+        // 2. Ваш собственный прокси на Render (после деплоя замените URL)
+        custom: 'https://n8n-cors-proxy-xxxx.onrender.com', // Замените xxxx на ваш ID
+        // 3. Альтернативный публичный прокси
+        alternative: 'https://cors-anywhere.herokuapp.com/https://n8ntest-uwxt.onrender.com'
+    },
+    currentProxy: 'public', // Какой прокси использовать: 'public', 'custom', 'alternative' или 'none'
     supabaseUrl: 'https://xklameqcsrbvepjecwtn.supabase.co',
     supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrbGFtZXFjc3JidmVwamVjd3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MjE5MTIsImV4cCI6MjA3MTI5NzkxMn0.M82x241D4KgJ3GCKURlRfdr1qWsjLmjrWvzUMIMn9Oc',
     refreshInterval: 5000, // Обновление каждые 5 секунд
@@ -53,10 +62,35 @@ function toggleCorsProxy() {
     addLog('info', `CORS прокси ${status.toLowerCase()}`);
     
     if (CONFIG.useCorsProxy) {
-        showAlert('info', '🌐 CORS прокси включен. Webhook запросы будут проходить через прокси.');
+        showAlert('info', `🌐 CORS прокси включен (${CONFIG.currentProxy}). Webhook запросы будут проходить через прокси.`);
     } else {
         showAlert('warning', '⚠️ CORS прокси отключен. Нужно настроить CORS в n8n.');
     }
+}
+
+// Функция переключения типа прокси
+function switchProxyType(type) {
+    if (!['public', 'custom', 'alternative', 'none'].includes(type)) {
+        showAlert('error', '❌ Неверный тип прокси');
+        return;
+    }
+    
+    CONFIG.currentProxy = type;
+    
+    if (type === 'none') {
+        CONFIG.useCorsProxy = false;
+        addLog('warning', 'CORS прокси отключен');
+        showAlert('warning', '⚠️ CORS прокси отключен. Требуется настройка CORS в n8n.');
+    } else {
+        CONFIG.useCorsProxy = true;
+        const proxyUrl = CONFIG.corsProxyOptions[type];
+        addLog('info', `Переключен на ${type} прокси: ${proxyUrl}`);
+        showAlert('success', `✅ Используется ${type} прокси`);
+    }
+    
+    // Обновляем UI
+    toggleCorsProxy();
+    toggleCorsProxy(); // Вызываем дважды чтобы вернуть в правильное состояние
 }
 
 // Тест CORS подключения
@@ -161,9 +195,14 @@ async function handleSchedule(e) {
     const startTime = Date.now();
     
     try {
-        const webhookUrl = CONFIG.useCorsProxy 
-            ? `${CONFIG.n8nWebhookUrlWithProxy}/webhook/schedule-notification`
-            : `${CONFIG.n8nWebhookUrl}/webhook/schedule-notification`;
+        // Определяем URL в зависимости от настроек прокси
+        let webhookUrl;
+        if (CONFIG.useCorsProxy && CONFIG.currentProxy !== 'none') {
+            const proxyUrl = CONFIG.corsProxyOptions[CONFIG.currentProxy];
+            webhookUrl = `${proxyUrl}/webhook/schedule-notification`;
+        } else {
+            webhookUrl = `${CONFIG.n8nWebhookUrl}/webhook/schedule-notification`;
+        }
             
         const response = await fetch(webhookUrl, {
             method: 'POST',
@@ -347,9 +386,14 @@ function updateNotificationsList() {
 // Отмена уведомления
 async function cancelNotification(activityId) {
     try {
-        const webhookUrl = CONFIG.useCorsProxy 
-            ? `${CONFIG.n8nWebhookUrlWithProxy}/webhook/cancel-notifications/${activityId}`
-            : `${CONFIG.n8nWebhookUrl}/webhook/cancel-notifications/${activityId}`;
+        // Определяем URL в зависимости от настроек прокси
+        let webhookUrl;
+        if (CONFIG.useCorsProxy && CONFIG.currentProxy !== 'none') {
+            const proxyUrl = CONFIG.corsProxyOptions[CONFIG.currentProxy];
+            webhookUrl = `${proxyUrl}/webhook/cancel-notifications/${activityId}`;
+        } else {
+            webhookUrl = `${CONFIG.n8nWebhookUrl}/webhook/cancel-notifications/${activityId}`;
+        }
             
         const response = await fetch(webhookUrl, {
             method: 'DELETE'

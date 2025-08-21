@@ -1,4 +1,17 @@
 services:
+  # CORS Proxy Service
+  - type: web
+    name: n8n-cors-proxy
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: N8N_URL
+        value: https://n8ntest-uwxt.onrender.com
+      - key: PORT
+        value: 10000
+    autoDeploy: false
+
   # PostgreSQL Database
   - type: pserv
     name: n8n-postgres
